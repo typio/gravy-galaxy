@@ -1,7 +1,7 @@
 use std::iter;
 
 use cgmath::prelude::*;
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, Limits};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -273,7 +273,11 @@ impl State {
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
                     limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
+                        Limits {
+                            max_texture_dimension_1d: 6000,
+                            max_texture_dimension_2d: 6000,
+                            ..wgpu::Limits::downlevel_webgl2_defaults()
+                        }
                     } else {
                         wgpu::Limits::default()
                     },
