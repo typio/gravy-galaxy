@@ -6,7 +6,6 @@ gravy-galaxy/pkg/
 gravy-galaxy/wasm-pack.log
 gravy-galaxy/.*
 gravy-galaxy/wasm-pack.log
-!gravy-galaxy/res
 
 # Logs
 */logs
@@ -17,7 +16,7 @@ gravy-galaxy/wasm-pack.log
 */pnpm-debug.log*
 */lerna-debug.log*
 
-*/public/res
+www/public/res
 */node_modules
 */dist
 */dist-ssr
