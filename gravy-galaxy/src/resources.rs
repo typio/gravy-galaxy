@@ -1,7 +1,5 @@
 use std::io::{BufReader, Cursor};
 
-use itertools::izip;
-
 use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
 
@@ -75,17 +73,17 @@ pub async fn load_model_gltf(
     layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model> {
     let binary_glb = load_binary(file_name).await.unwrap();
-    let (model_gltf, buffers, images) = gltf::import_slice(&binary_glb)?;
+    let (model_gltf, buffers, _) = gltf::import_slice(&binary_glb)?;
 
     let mut materials = vec![];
     for material in model_gltf.materials() {
         let pbr = material.pbr_metallic_roughness();
-        let base_color_factor = pbr.base_color_factor();
+        let _base_color_factor = pbr.base_color_factor();
         let base_color_texture_source = pbr
             .base_color_texture()
             .map(|info| info.texture().source().source());
-        match &base_color_texture_source.unwrap() {
-            gltf::image::Source::View { view, mime_type } => {
+        match &base_color_texture_source {
+            Some(gltf::image::Source::View { view, mime_type: _ }) => {
                 let diffuse_texture = texture::Texture::from_bytes(
                     device,
                     queue,
@@ -116,7 +114,11 @@ pub async fn load_model_gltf(
                     bind_group,
                 });
             }
-            gltf::image::Source::Uri { uri, mime_type } => panic!("uri"),
+            Some(gltf::image::Source::Uri {
+                uri: _,
+                mime_type: _,
+            }) => panic!("uri"),
+            _ => log::error!("didn't get gltf model texture"),
         }
     }
 
@@ -135,7 +137,7 @@ pub async fn load_model_gltf(
                 indices.append(&mut reader.read_indices().unwrap().into_u32().collect());
             });
 
-            let mut vertices = (0..positions.len())
+            let vertices = (0..positions.len())
                 .map(|i| model::ModelVertex {
                     position: [positions[i][0], positions[i][1], positions[i][2]],
                     tex_coords: [texcoords[i][0], texcoords[i][1]],

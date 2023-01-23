@@ -1,6 +1,10 @@
-use std::iter;
+use std::{collections::HashMap, iter};
 
 use cgmath::prelude::*;
+
+#[allow(unused_imports)]
+use log::{error, info, warn};
+
 use wgpu::{util::DeviceExt, Limits};
 use winit::{
     event::*,
@@ -8,9 +12,11 @@ use winit::{
     window::Window,
 };
 
+#[allow(unused_imports)]
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+mod galaxy;
 mod model;
 mod resources;
 mod texture;
@@ -142,6 +148,7 @@ impl CameraController {
             camera.eye -= forward_norm * self.speed;
         }
 
+        let up = camera.up;
         let right = forward_norm.cross(camera.up);
 
         // Redo radius calc in case the up/ down is pressed.
@@ -156,6 +163,14 @@ impl CameraController {
         }
         if self.is_left_pressed {
             camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+        }
+
+        // bad math
+        if self.is_up_pressed {
+            camera.eye = camera.target - (forward + up * self.speed).normalize() * forward_mag;
+        }
+        if self.is_down_pressed {
+            camera.eye = camera.target - (forward - up * self.speed).normalize() * forward_mag;
         }
     }
 }
@@ -227,8 +242,9 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+    galaxy: galaxy::Galaxy,
+    models: std::collections::HashMap<String, model::Model>,
     render_pipeline: wgpu::RenderPipeline,
-    model: model::Model,
     camera: Camera,
     camera_controller: CameraController,
     camera_uniform: CameraUniform,
@@ -324,15 +340,15 @@ impl State {
             });
 
         let camera = Camera {
-            eye: (5.0, 0.0, 0.0).into(),
+            eye: (500.0, 0.0, 500.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
             fovy: 45.0,
             znear: 0.1,
-            zfar: 1000.0,
+            zfar: 100000.0,
         };
-        let camera_controller = CameraController::new(0.1);
+        let camera_controller = CameraController::new(15.0);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera);
@@ -341,25 +357,6 @@ impl State {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let instances = vec![Instance {
-            position: cgmath::Vector3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            rotation: cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(0.0),
-            ),
-        }];
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let camera_bind_group_layout =
@@ -387,15 +384,47 @@ impl State {
         });
 
         log::warn!("Load model");
-        let model = resources::load_model_gltf(
-            "moon_scaled.glb",
-            &device,
-            &queue,
-            &texture_bind_group_layout,
-        )
-        .await
-        .unwrap();
+        let mut models = HashMap::new();
 
+        let model_names = vec![
+            "sun", "mercury", "venus", "earth", "moon", "mars", "jupiter", "saturn", "uranus",
+            "neptune",
+        ];
+        for model_name in model_names {
+            models.insert(
+                String::from(model_name),
+                resources::load_model_gltf(
+                    &(String::from(model_name) + ".glb"),
+                    &device,
+                    &queue,
+                    &texture_bind_group_layout,
+                )
+                .await
+                .unwrap(),
+            );
+        }
+
+        log::warn!("Create galaxy");
+        let galaxy = galaxy::Galaxy::new();
+
+        let instances = vec![Instance {
+            position: cgmath::Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation: cgmath::Quaternion::from_axis_angle(
+                cgmath::Vector3::unit_z(),
+                cgmath::Deg(0.0),
+            ),
+        }];
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader.wgsl"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -468,7 +497,8 @@ impl State {
             config,
             size,
             render_pipeline,
-            model,
+            models,
+            galaxy,
             camera,
             camera_controller,
             camera_buffer,
@@ -548,13 +578,42 @@ impl State {
                 }),
             });
 
+            self.galaxy.tick();
+
+            self.instances = self
+                .galaxy
+                .bodies
+                .iter()
+                .map(|b| Instance {
+                    position: b.position,
+                    rotation: b.rotation,
+                })
+                .collect();
+
+            let instance_data = self
+                .instances
+                .iter()
+                .map(Instance::to_raw)
+                .collect::<Vec<_>>();
+
+            self.instance_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Instance Buffer"),
+                        contents: bytemuck::cast_slice(&instance_data),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw_model_instanced(
-                &self.model,
-                0..self.instances.len() as u32,
-                &self.camera_bind_group,
-            );
+
+            for (i, body) in (0u32..).zip(&self.galaxy.bodies) {
+                render_pass.draw_model_instanced(
+                    &self.models[&body.model],
+                    i as u32..i as u32 + 1,
+                    &self.camera_bind_group,
+                );
+            }
         }
 
         self.queue.submit(iter::once(encoder.finish()));

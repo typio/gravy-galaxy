@@ -1,6 +1,6 @@
 [package]
 name = "gravy-galaxy"
-version = "0.0.6"
+version = "0.0.7"
 authors = ["Thomas Huber <me@tohuber.com>"]
 edition = "2021"
 repository = "https://github.com/typio/gravy-galaxy"
@@ -15,7 +15,6 @@ bytemuck = { version = "1.12", features = [ "derive" ] }
 cfg-if = "1"
 cgmath = "0.18"
 env_logger = "0.10"
-itertools = "0.10.5"
 pollster = "0.2"
 log = "0.4"
 tobj = { version = "3.2", features = ["async"]}
