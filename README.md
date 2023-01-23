@@ -17,6 +17,7 @@ Currently it builds for WebGL but that will be changed to webGPU when it's relea
 ## Resources
 
 - [learn-wgpu - sotrh](https://sotrh.github.io/learn-wgpu/)
+- [Diagram of Galaxy - Bartolomeu Velho](https://en.wikipedia.org/wiki/File:Bartolomeu_Velho_1568.jpg)
 - [Solar System 3D Models - NASA](https://solarsystem.nasa.gov/resources)
 - [Mutual Attraction - The Coding Train](https://www.youtube.com/watch?v=GjbKsOkN1Oc)
 - [n-Body Choreographies - James Montaldi](https://personalpages.manchester.ac.uk/staff/j.montaldi/Choreographies) [(Paper)](https://arxiv.org/pdf/1305.0470.pdf)
